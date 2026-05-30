@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Yandex Messenger Qt
+Name[ru]=Яндекс Мессенджер Qt
+Comment=Unofficial Qt wrapper for Yandex Messenger
+Comment[ru]=Неофициальная Qt-оболочка для Яндекс Мессенджера
+Exec=yandex-messenger-qt
+Icon=yandex-messenger-qt
+Terminal=false
+Categories=Network;InstantMessaging;
+StartupNotify=true

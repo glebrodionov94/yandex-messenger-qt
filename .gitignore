@@ -1,0 +1,10 @@
+build/
+dist/
+portable/
+*.deb
+*.tar.gz
+*.zip
+CMakeUserPresets.json
+.cache/
+.idea/
+.vscode/
