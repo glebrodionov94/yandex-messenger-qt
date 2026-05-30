@@ -173,8 +173,8 @@ Workflow запускается при push в `main`, при pull request и в
 
 ```bash
 git push origin main
-git tag -a v0.2.0 -m "Release v0.2.0"
-git push origin v0.2.0
+git tag -a v0.2.2 -m "Release v0.2.2"
+git push origin v0.2.2
 ```
 
 ## Лицензия

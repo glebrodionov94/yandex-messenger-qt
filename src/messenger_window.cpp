@@ -4,6 +4,7 @@
 #include "autostart_manager.h"
 #include "diagnostics.h"
 #include "page_patches.h"
+#include "web_popup_window.h"
 
 #include <QApplication>
 #include <QCoreApplication>
@@ -33,6 +34,7 @@
 #include <QSize>
 #include <QUrl>
 #include <QWebEngineCookieStore>
+#include <QWebEngineNewWindowRequest>
 #include <QWebEngineNotification>
 #include <QWebEnginePage>
 #include <QWebEngineProfile>
@@ -180,6 +182,11 @@ QString shellEscape(const QString &value)
     escaped.replace('`', QStringLiteral("\\`"));
     return QStringLiteral("\"") + escaped + QStringLiteral("\"");
 }
+
+QString normalizedHost(const QUrl &url)
+{
+    return url.host().toLower();
+}
 } // namespace
 
 MessengerWindow::MessengerWindow()
@@ -212,6 +219,8 @@ MessengerWindow::MessengerWindow()
     m_page = new QWebEnginePage(m_profile, m_view);
     m_view->setPage(m_page);
     setCentralWidget(m_view);
+
+    configureWebPage(m_page);
 
     createActions();
     createTray();
@@ -565,6 +574,208 @@ void MessengerWindow::reloadPage()
     m_view->reload();
 }
 
+void MessengerWindow::configureWebPage(QWebEnginePage *page)
+{
+    if (!page) {
+        return;
+    }
+
+    connect(page, &QWebEnginePage::urlChanged, this, [this, page](const QUrl &url) {
+        qInfo() << "WebEngine URL changed to" << url;
+
+        if (page == m_page) {
+            if (m_visualPatchesEnabled && isMessengerPage(url)) {
+                applyVisualPatches();
+            }
+            return;
+        }
+
+        if (shouldHandlePopupUrl(url)) {
+            closePopupIfNeeded(url);
+        }
+    });
+
+    connect(page, &QWebEnginePage::newWindowRequested,
+            this, [this, page](QWebEngineNewWindowRequest &request) {
+                qInfo() << "newWindowRequested" << request.requestedUrl()
+                         << "userInitiated=" << request.isUserInitiated();
+
+                if (!request.isUserInitiated() && !isTrustedYandexOrigin(request.requestedUrl())) {
+                    qWarning() << "Blocked non-user-initiated popup:" << request.requestedUrl();
+                    return;
+                }
+
+                if (!isTrustedYandexOrigin(request.requestedUrl()) && !request.requestedUrl().isEmpty()) {
+                    const auto result = QMessageBox::question(
+                        this,
+                        QStringLiteral("Открыть ссылку"),
+                        QStringLiteral("Открыть внешнюю ссылку в браузере?\n%1")
+                            .arg(request.requestedUrl().toString()),
+                        QMessageBox::Yes | QMessageBox::No,
+                        QMessageBox::No);
+                    if (result == QMessageBox::Yes) {
+                        QDesktopServices::openUrl(request.requestedUrl());
+                    }
+                    return;
+                }
+
+                openPopupForRequest(request.requestedUrl(), request.isUserInitiated());
+                if (m_popupWindow && m_popupWindow->page()) {
+                    request.openIn(m_popupWindow->page());
+                } else {
+                    qWarning() << "Unable to create popup window for" << request.requestedUrl();
+                }
+            });
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+    connect(page, &QWebEnginePage::permissionRequested,
+            this, [this, page](QWebEnginePermission permission) {
+                Q_UNUSED(page);
+                using Type = QWebEnginePermission::PermissionType;
+                const auto type = permission.permissionType();
+                const QUrl origin = permission.origin();
+                if (isMessengerPage(origin) && !isTrustedYandexOrigin(origin)) {
+                    permission.deny();
+                    return;
+                }
+
+                if (type == Type::Notifications) {
+                    if (isTrustedYandexOrigin(origin)) {
+                        permission.grant();
+                    } else {
+                        permission.deny();
+                    }
+                    return;
+                }
+
+                const bool sensitive = type == Type::MediaAudioCapture
+                    || type == Type::MediaVideoCapture
+                    || type == Type::MediaAudioVideoCapture
+                    || type == Type::DesktopVideoCapture
+                    || type == Type::DesktopAudioVideoCapture;
+
+                if (!sensitive) {
+                    permission.deny();
+                    return;
+                }
+
+                const QString question = QStringLiteral(
+                    "Сайт %1 запрашивает %2.\n\nРазрешить?")
+                    .arg(permission.origin().host(), permissionDescription(static_cast<int>(type)));
+
+                const auto result = QMessageBox::question(
+                    this,
+                    QStringLiteral("Разрешение сайта"),
+                    question,
+                    QMessageBox::Yes | QMessageBox::No,
+                    QMessageBox::No);
+
+                if (result == QMessageBox::Yes) {
+                    permission.grant();
+                } else {
+                    permission.deny();
+                }
+            });
+#else
+    connect(page, &QWebEnginePage::featurePermissionRequested,
+            this, [this, page](const QUrl &origin, QWebEnginePage::Feature feature) {
+                if (page != m_page && !isTrustedYandexOrigin(origin)) {
+                    page->setFeaturePermission(origin, feature, QWebEnginePage::PermissionDeniedByUser);
+                    return;
+                }
+
+                if (feature == QWebEnginePage::Notifications) {
+                    page->setFeaturePermission(
+                        origin,
+                        feature,
+                        isTrustedYandexOrigin(origin)
+                            ? QWebEnginePage::PermissionGrantedByUser
+                            : QWebEnginePage::PermissionDeniedByUser);
+                    return;
+                }
+
+                const bool sensitive = feature == QWebEnginePage::MediaAudioCapture
+                    || feature == QWebEnginePage::MediaVideoCapture
+                    || feature == QWebEnginePage::MediaAudioVideoCapture
+                    || feature == QWebEnginePage::DesktopVideoCapture
+                    || feature == QWebEnginePage::DesktopAudioVideoCapture;
+
+                if (!sensitive) {
+                    page->setFeaturePermission(
+                        origin,
+                        feature,
+                        QWebEnginePage::PermissionDeniedByUser);
+                    return;
+                }
+
+                const QString question = QStringLiteral(
+                    "Сайт %1 запрашивает %2.\n\nРазрешить?")
+                    .arg(origin.host(), permissionDescription(feature));
+
+                const auto result = QMessageBox::question(
+                    this,
+                    QStringLiteral("Разрешение сайта"),
+                    question,
+                    QMessageBox::Yes | QMessageBox::No,
+                    QMessageBox::No);
+
+                page->setFeaturePermission(
+                    origin,
+                    feature,
+                    result == QMessageBox::Yes
+                        ? QWebEnginePage::PermissionGrantedByUser
+                        : QWebEnginePage::PermissionDeniedByUser);
+            });
+#endif
+}
+
+void MessengerWindow::handleNewWindowRequest(QWebEnginePage *sourcePage, QWebEnginePage::WebWindowType type,
+                                            const QUrl &requestedUrl, bool userInitiated)
+{
+    Q_UNUSED(sourcePage);
+    Q_UNUSED(type);
+    Q_UNUSED(requestedUrl);
+    Q_UNUSED(userInitiated);
+}
+
+void MessengerWindow::openPopupForRequest(const QUrl &requestedUrl, bool userInitiated)
+{
+    Q_UNUSED(userInitiated);
+
+    if (!m_popupWindow) {
+        m_popupWindow = new WebPopupWindow(m_profile, this);
+        configureWebPage(m_popupWindow->page());
+        connect(m_popupWindow, &QDialog::finished, this, [this](int) {
+            if (m_view) {
+                m_view->reload();
+            }
+            if (m_view) {
+                showAndActivate();
+            }
+        });
+    }
+
+    if (m_popupWindow && m_popupWindow->page()) {
+        m_popupWindow->page()->setUrl(requestedUrl.isEmpty()
+                                         ? QUrl(QString::fromLatin1("https://passport.yandex.ru"))
+                                         : requestedUrl);
+        m_popupWindow->activatePopup();
+    }
+}
+
+void MessengerWindow::closePopupIfNeeded(const QUrl &url)
+{
+    if (!m_popupWindow) {
+        return;
+    }
+
+    if (isMessengerPage(url)) {
+        m_popupWindow->close();
+        m_view->reload();
+        showAndActivate();
+    }
+}
+
 void MessengerWindow::setVisualPatchesEnabled(bool enabled)
 {
     if (m_visualPatchesEnabled == enabled) {
@@ -871,8 +1082,27 @@ void MessengerWindow::showMessage(const QString &title, const QString &message, 
 
 bool MessengerWindow::isTrustedYandexOrigin(const QUrl &origin) const
 {
-    const QString host = origin.host().toLower();
-    return host == QStringLiteral("yandex.ru") || host.endsWith(QStringLiteral(".yandex.ru"));
+    return isTrustedYandexHost(origin.host()) || normalizedHost(origin) == QStringLiteral("passport.yandex.ru");
+}
+
+bool MessengerWindow::isTrustedYandexHost(const QString &host) const
+{
+    const QString normalized = host.toLower();
+    return normalized == QStringLiteral("yandex.ru") || normalized.endsWith(QStringLiteral(".yandex.ru"));
+}
+
+bool MessengerWindow::isMessengerPage(const QUrl &url) const
+{
+    const QString host = normalizedHost(url);
+    return isTrustedYandexOrigin(url) && url.path().startsWith(QStringLiteral("/chat"));
+}
+
+bool MessengerWindow::shouldHandlePopupUrl(const QUrl &url) const
+{
+    if (!url.isValid() || url.isEmpty()) {
+        return false;
+    }
+    return isTrustedYandexOrigin(url) || isMessengerPage(url);
 }
 
 QString MessengerWindow::profilePath() const

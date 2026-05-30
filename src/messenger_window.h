@@ -3,6 +3,7 @@
 #include <QMainWindow>
 #include <QSettings>
 #include <QSystemTrayIcon>
+#include <QPointer>
 #include <QWebEngineNotification>
 #include <QWebEnginePage>
 #include <QWebEngineProfile>
@@ -16,6 +17,7 @@ class QAction;
 class QCloseEvent;
 class QEvent;
 class QMenu;
+class WebPopupWindow;
 
 class MessengerWindow final : public QMainWindow
 {
@@ -41,6 +43,11 @@ private:
     void applyVisualPatches();
     void restoreVisualPatches();
     void reloadPage();
+    void configureWebPage(QWebEnginePage *page);
+    void handleNewWindowRequest(QWebEnginePage *sourcePage, QWebEnginePage::WebWindowType type,
+                                const QUrl &requestedUrl, bool userInitiated);
+    void openPopupForRequest(const QUrl &requestedUrl, bool userInitiated);
+    void closePopupIfNeeded(const QUrl &url);
     void setVisualPatchesEnabled(bool enabled);
     void setSidebarEnabled(bool enabled);
     void setCompactLayoutEnabled(bool enabled);
@@ -62,6 +69,9 @@ private:
     void showMessage(const QString &title, const QString &message,
                      QSystemTrayIcon::MessageIcon icon = QSystemTrayIcon::Information);
     bool isTrustedYandexOrigin(const QUrl &origin) const;
+    bool isTrustedYandexHost(const QString &host) const;
+    bool isMessengerPage(const QUrl &url) const;
+    bool shouldHandlePopupUrl(const QUrl &url) const;
     QString profilePath() const;
     QString cachePath() const;
     static QString shellQuote(const QString &value);
@@ -69,6 +79,7 @@ private:
     QWebEngineProfile *m_profile = nullptr;
     QWebEnginePage *m_page = nullptr;
     QWebEngineView *m_view = nullptr;
+    QPointer<WebPopupWindow> m_popupWindow;
     QSystemTrayIcon *m_tray = nullptr;
     QMenu *m_trayMenu = nullptr;
 

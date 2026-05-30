@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(yandex-messenger-qt VERSION 0.2.1 LANGUAGES CXX)
+project(yandex-messenger-qt VERSION 0.2.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -16,6 +16,7 @@ add_executable(yandex-messenger-qt
     src/messenger_window.cpp
     src/page_patches.cpp
     src/single_instance.cpp
+    src/web_popup_window.cpp
 )
 
 target_link_libraries(yandex-messenger-qt PRIVATE

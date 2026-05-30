@@ -1,6 +1,6 @@
 # Yandex Messenger Qt: portable binary
 
-This archive contains the Linux x86_64 executable for release 0.2.0, built on Ubuntu 24.04.
+This archive contains the Linux x86_64 executable for release 0.2.2, built on Ubuntu 24.04.
 
 It is not a fully static build. Install the runtime Qt WebEngine libraries
 provided by your distribution before launching it.

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2
+
+- Fixed login popups so Yandex ID authorization stays inside Qt WebEngine and shares cookies with the main session.
+- Added popup window support for `window.open()` and `target="_blank"` flows during sign-in.
+
 ## 0.2.0
 
 - Added single-instance mode.
