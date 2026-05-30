@@ -1,0 +1,40 @@
+name: Предложение функции
+about: Предложить улучшение или новую возможность
+labels: [enhancement]
+title: "[Feature] "
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Описание функции
+      render: markdown
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Зачем она нужна
+      render: markdown
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Предлагаемое поведение
+      render: markdown
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Альтернативы
+      render: markdown
+    validations:
+      required: false
+  - type: textarea
+    id: additional
+    attributes:
+      label: Дополнительные сведения
+      render: markdown
+    validations:
+      required: false

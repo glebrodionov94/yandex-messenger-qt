@@ -24,11 +24,17 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes                 build-essential                 cmake                 ninja-build                 dpkg-dev                 qt6-base-dev                 qt6-webengine-dev
+          sudo apt-get install --yes \
+            build-essential \
+            cmake \
+            ninja-build \
+            dpkg-dev \
+            qt6-base-dev \
+            qt6-webengine-dev
 
       - name: Configure
         run: |
-          cmake -S . -B build -G Ninja                 -DCMAKE_BUILD_TYPE=Release
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
         run: cmake --build build --parallel
@@ -37,6 +43,9 @@ jobs:
         run: |
           cd build
           cpack -G DEB
+
+      - name: Verify Debian package
+        run: test -n "$(find build -maxdepth 1 -name '*.deb' -print -quit)"
 
       - name: Prepare downloadable files
         run: |
@@ -63,4 +72,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" dist/*                 --generate-notes                 --title "${GITHUB_REF_NAME}"
+          gh release create "${GITHUB_REF_NAME}" dist/* \
+            --generate-notes \
+            --title "${GITHUB_REF_NAME}"

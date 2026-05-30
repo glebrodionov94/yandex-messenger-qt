@@ -1,0 +1,79 @@
+name: Сообщение об ошибке
+about: Сообщить о проблеме в приложении
+labels: [bug]
+title: "[Bug] "
+body:
+  - type: input
+    id: app_version
+    attributes:
+      label: Версия приложения
+      placeholder: 0.2.0
+    validations:
+      required: true
+  - type: input
+    id: distro
+    attributes:
+      label: Дистрибутив Linux
+      placeholder: Ubuntu 24.04 / Kubuntu 24.04 / Fedora 40
+    validations:
+      required: true
+  - type: input
+    id: plasma_version
+    attributes:
+      label: Версия KDE Plasma
+      placeholder: 6.2.0
+    validations:
+      required: true
+  - type: dropdown
+    id: session_type
+    attributes:
+      label: Wayland или X11
+      options:
+        - Wayland
+        - X11
+    validations:
+      required: true
+  - type: input
+    id: qt_version
+    attributes:
+      label: Версия Qt
+      placeholder: 6.8.2
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Шаги воспроизведения
+      placeholder: 1. ...
+      render: markdown
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Ожидаемое поведение
+      render: markdown
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Фактическое поведение
+      render: markdown
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Диагностическая информация
+      render: markdown
+      description: Вставьте текст из пункта меню "Скопировать диагностическую информацию".
+    validations:
+      required: true
+  - type: textarea
+    id: additional
+    attributes:
+      label: Дополнительные сведения
+      render: markdown
+    validations:
+      required: false

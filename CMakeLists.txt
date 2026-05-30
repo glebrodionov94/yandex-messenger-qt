@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(yandex-messenger-qt VERSION 0.1.0 LANGUAGES CXX)
+project(yandex-messenger-qt VERSION 0.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -7,15 +7,25 @@ set(CMAKE_AUTOMOC ON)
 
 include(GNUInstallDirs)
 
-find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets WebEngineWidgets)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets WebEngineWidgets Network)
 
 add_executable(yandex-messenger-qt
+    src/autostart_manager.cpp
+    src/diagnostics.cpp
     src/main.cpp
+    src/messenger_window.cpp
+    src/page_patches.cpp
+    src/single_instance.cpp
 )
 
 target_link_libraries(yandex-messenger-qt PRIVATE
     Qt6::Widgets
     Qt6::WebEngineWidgets
+    Qt6::Network
+)
+
+target_compile_definitions(yandex-messenger-qt PRIVATE
+    APP_VERSION="${PROJECT_VERSION}"
 )
 
 install(TARGETS yandex-messenger-qt
