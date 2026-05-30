@@ -14,6 +14,11 @@
 - Added diagnostic information copy action.
 - Improved tray behavior and settings persistence.
 
+## 0.2.1
+
+- Added separate `.deb` packages for Ubuntu 24.04 and Ubuntu 26.04.
+- Fixed installation on Ubuntu 26.04 where Qt 6 package names no longer use the `t64` suffix.
+
 ## 0.1.0
 
 - Initial public version.

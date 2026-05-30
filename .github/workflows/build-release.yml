@@ -13,7 +13,7 @@ permissions:
   contents: write
 
 jobs:
-  build-ubuntu:
+  build-ubuntu-24:
     name: Ubuntu 24.04 x86_64
     runs-on: ubuntu-24.04
 
@@ -51,27 +51,118 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist portable
-          cp build/*.deb dist/
-          cp build/yandex-messenger-qt portable/
-          cp README-BINARY.md portable/README.md
-          tar -C portable -czf dist/yandex-messenger-qt-linux-x86_64.tar.gz .
+          DEB_ORIG=$(find build -maxdepth 1 -name '*.deb' -print -quit)
+          if [ -z "${DEB_ORIG:-}" ]; then exit 1; fi
+          ORIG_NAME=$(basename "$DEB_ORIG")
+          NEW_NAME=$(echo "$ORIG_NAME" | sed 's/_amd64.deb$/_ubuntu-24.04_amd64.deb/')
+          mv "$DEB_ORIG" dist/"$NEW_NAME"
+          cp build/yandex-messenger-qt portable/ || true
+          cp README-BINARY.md portable/README.md || true
+          tar -C portable -czf dist/yandex-messenger-qt-linux-x86_64.tar.gz . || true
           (
             cd dist
             sha256sum ./* > SHA256SUMS
           )
 
-      - name: Upload workflow artifact
+      - name: Upload workflow artifact (24.04)
         uses: actions/upload-artifact@v4
         with:
           name: yandex-messenger-qt-ubuntu-24.04-x86_64
           path: dist/
           if-no-files-found: error
 
+  build-ubuntu-26:
+    name: Ubuntu 26.04 x86_64
+    runs-on: ubuntu-24.04
+    container:
+      image: ubuntu:26.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies (inside container)
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install --yes \
+            build-essential \
+            cmake \
+            ninja-build \
+            dpkg-dev \
+            qt6-base-dev \
+            qt6-webengine-dev \
+            desktop-file-utils \
+            ca-certificates \
+            git
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Build Debian package
+        run: |
+          cd build
+          cpack -G DEB
+
+      - name: Verify Debian package
+        run: test -n "$(find build -maxdepth 1 -name '*.deb' -print -quit)"
+
+      - name: Prepare downloadable files (26.04)
+        run: |
+          set -euo pipefail
+          mkdir -p dist portable
+          DEB_ORIG=$(find build -maxdepth 1 -name '*.deb' -print -quit)
+          if [ -z "${DEB_ORIG:-}" ]; then exit 1; fi
+          ORIG_NAME=$(basename "$DEB_ORIG")
+          NEW_NAME=$(echo "$ORIG_NAME" | sed 's/_amd64.deb$/_ubuntu-26.04_amd64.deb/')
+          mv "$DEB_ORIG" dist/"$NEW_NAME"
+          cp build/yandex-messenger-qt portable/ || true
+          cp README-BINARY.md portable/README.md || true
+          tar -C portable -czf dist/yandex-messenger-qt-linux-x86_64.tar.gz . || true
+          (
+            cd dist
+            sha256sum ./* > SHA256SUMS
+          )
+
+      - name: Upload workflow artifact (26.04)
+        uses: actions/upload-artifact@v4
+        with:
+          name: yandex-messenger-qt-ubuntu-26.04-x86_64
+          path: dist/
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish release (attach artifacts)
+    needs: [build-ubuntu-24, build-ubuntu-26]
+    runs-on: ubuntu-24.04
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download 24.04 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: yandex-messenger-qt-ubuntu-24.04-x86_64
+          path: artifacts/24
+
+      - name: Download 26.04 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: yandex-messenger-qt-ubuntu-26.04-x86_64
+          path: artifacts/26
+
+      - name: List downloaded files
+        run: ls -la artifacts || true
+
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" dist/* \
+          set -euo pipefail
+          FILES=$(find artifacts -type f -name '*ubuntu-*amd64.deb' -print | tr '\n' ' ')
+          SUMS=$(find artifacts -type f -name 'SHA256SUMS' -print | tr '\n' ' ')
+          echo "Attaching: $FILES $SUMS"
+          gh release create "${GITHUB_REF_NAME}" $FILES $SUMS \
             --generate-notes \
             --title "${GITHUB_REF_NAME}"
