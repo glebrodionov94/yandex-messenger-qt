@@ -165,9 +165,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          FILES=$(find artifacts -type f -name '*ubuntu-*amd64.deb' -print | tr '\n' ' ')
-          SUMS=$(find artifacts -type f -name 'SHA256SUMS' -print | tr '\n' ' ')
-          echo "Attaching: $FILES $SUMS"
-          gh release create "${GITHUB_REF_NAME}" $FILES $SUMS \
-            --generate-notes \
-            --title "${GITHUB_REF_NAME}"
+          # Create the release (if already exists, ignore error)
+          gh release create "${GITHUB_REF_NAME}" --generate-notes --title "${GITHUB_REF_NAME}" || true
+          # Upload artifacts separately to avoid upload race/404s
+          if [ -d artifacts/24 ]; then
+            gh release upload "${GITHUB_REF_NAME}" artifacts/24/* --clobber || true
+          fi
+          if [ -d artifacts/26 ]; then
+            gh release upload "${GITHUB_REF_NAME}" artifacts/26/* --clobber || true
+          fi
